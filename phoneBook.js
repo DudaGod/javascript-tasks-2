@@ -1,202 +1,255 @@
 'use strict';
 
-var phoneBook = [];
+var REGEXP_NAME = /^([a-zа-яё0-9]+\s?)+[^\s]$/i;
+var REGEXP_PHONE = /^\+?\d{0,4}\s?(?:\d{3}|\(\d{3}\))\s?\d{3}[\s-]?\d[\s-]?\d{3}$/;
+var REGEXP_EMAIL = /^[a-zа-яё0-9](?:\.?[a-zа-яё0-9-_]+)+@(?:[a-zа-яё0-9][-_a-zа-яё0-9]+\.)+[a-zа-яё]{2,4}$/i;
 
-function isPhoneBookEmpty() {
-    if (!phoneBook.length) {
-        console.log('Sorry, phone book is empty.');
-        return true;
-    }
-    return false;
-}
+module.exports.add = add;
+module.exports.find = find;
+module.exports.remove = remove;
+module.exports.importFromCsv = importFromCsv;
+module.exports.showTable = showTable;
 
-function getQueryRegExp(query) {
-    var queryRegExp = query.replace(/[^A-zА-я0-9_-\s]/g, "\\$&");
-    return queryRegExp;
-}
 
 /**
  * @constructor
- * @param {String} name
- * @param {String} phone
- * @param {String} email
  */
-var Phone = function(name, phone, email) {
+var PhoneBook = function () {
+    this._phones = [];
+};
+
+/**
+ * @param {Phone} phone
+ */
+PhoneBook.prototype.addPhone = function (phone) {
+    this._phones.push(phone);
+};
+
+/**
+ * @param {number} index
+ */
+PhoneBook.prototype.removePhone = function (index) {
+    this._phones.splice(index, 1);
+};
+
+/**
+ * @returns {number}
+ */
+PhoneBook.prototype.getCountPhones = function () {
+    return this._phones.length;
+};
+
+/**
+ * Return Phone object by index
+ * @param {number} index
+ * @returns {Phone}
+ */
+PhoneBook.prototype.getPhone = function (index) {
+    return this._phones[index];
+};
+
+/**
+ * Return all phones if query undefined and
+ * if query is declared - find appropriate phones
+ * @param {string|undefined} query
+ * @returns {string}
+ */
+PhoneBook.prototype.findPhones = function (query) {
+    var str = '';
+    this._phones.forEach(function (phone) {
+        if (!query) {
+            str += phone.getString() + '\n';
+            return;
+        }
+        str += phone.search(query) ? phone.getString() + '\n' : '';
+    });
+    return str;
+};
+
+/**
+ * Determine the max width of each column
+ * @param {Array.<string>} headers
+ * @returns {Array.<number>}
+ */
+PhoneBook.prototype.maxColumnWidth = function (headers) {
+    var max = [headers[0].length, headers[1].length, headers[2].length];
+    this._phones.forEach(function (phone) {
+        max[0] = Math.max(max[0], phone.nameLength());
+        max[1] = Math.max(max[1], phone.beautyPhoneLength());
+        max[2] = Math.max(max[2], phone.emailLength());
+    });
+    return max.map(function (num) {
+        return num + 2;
+    });
+};
+
+
+/**
+ * @constructor
+ * @param {string} name
+ * @param {string} phone
+ * @param {string} email
+ */
+var Phone = function (name, phone, email) {
     this._name = name;
     this._phone = phone;
+    this._beautyphone = beautifyPhone(phone);
     this._email = email;
 };
 
-Phone.prototype.show = function () {
-    console.log(this._name + ', ' + this._phone + ', ' + this._email);
+/**
+ * @returns {string}
+ */
+Phone.prototype.getString = function () {
+    return this._name + ', ' + this._beautyphone + ', ' + this._email;
 };
 
-Phone.prototype.search = function (query) {
-    return ~this._name.search(query) || ~this._phone.search(query) || ~this._email.search(query);
-};
-
-Phone.prototype.remove = function () {
-    delete this._name;
-    delete this._phone;
-    delete this._email;
-};
-
-Phone.prototype.maxLength = function () {
-    return Math.max(Math.max(this._name.length, this._phone.length), this._email.length);
-};
-
+/**
+ * @returns {Array.<string>}
+ */
 Phone.prototype.getValues = function () {
-    var arr = [];
-    arr.push(this._name);
-    arr.push(this._phone);
-    arr.push(this._email);
-    return arr;
+    return [this._name, this._beautyphone, this._email];
 };
 
-function isNameValid(name) {
-    var namePattern = /(?:[A-zА-я0-9]+\s?)+/;
-    return namePattern.test(name);
-}
-
-function isPhoneValid(phone) {
-    var phonePattern = /^\+?\d{0,4}\s?(?:\d{3}|\(\d{3}\))\s?\d{3}[\s-]?\d[\s-]?\d{3}$/;
-    return phonePattern.test(phone);
-}
-
-function isEmailValid(email) {
-    var emailPattern = /^[a-zа-я0-9](?:\.?[a-zа-я0-9-_]+)+@(?:[a-zа-я0-9][-_a-zа-я0-9]+\.)+[a-zа-я]{2,4}$/;
-    return emailPattern.test(email);
-}
-
-
-module.exports.add = function add(name, phone, email) {
-    if (isNameValid(name) && isPhoneValid(phone) && isEmailValid(email)) {
-        phoneBook.push(new Phone(name, phone, email));
-    }
+/**
+ * @param {string} query
+ * @returns {boolean}
+ */
+Phone.prototype.search = function (query) {
+    return ~this._name.search(query) ||
+            ~this._phone.search(query) ||
+            ~this._beautyphone.search(query) ||
+            ~this._email.search(query);
 };
 
-module.exports.find = function find(query) {
-    if (isPhoneBookEmpty()) {
-        return;
-    } else if (!arguments.length) {
-        phoneBook.forEach(function (item) {
-            item.show();
-        });
-        return;
-    }
-
-    var queryRegExp = getQueryRegExp(query);
-    var isFindEntry = false;
-
-    phoneBook.forEach(function (item) {
-        if (item.search(queryRegExp)) {
-            isFindEntry = true;
-            item.show();
-        }
-    });
-    if (!isFindEntry) {
-        console.log('Sorry, this query - ' + query + ' doesn\'t exist in phone book');
-    }
+/**
+ * @returns {number}
+ */
+Phone.prototype.nameLength = function () {
+    return this._name.length;
 };
 
-module.exports.remove = function remove(query) {
-    if (!arguments.length) {
+/**
+ * @returns {number}
+ */
+Phone.prototype.beautyPhoneLength = function () {
+    return this._beautyphone.length;
+};
+
+/**
+ * @returns {number}
+ */
+Phone.prototype.emailLength = function () {
+    return this._email.length;
+};
+
+
+var phoneBook = new PhoneBook();
+
+
+function isValid(name, phone, email) {
+    return REGEXP_NAME.test(name) && REGEXP_PHONE.test(phone) && REGEXP_EMAIL.test(email);
+}
+
+function add(name, phone, email) {
+    if (isValid(name, phone, email)) {
+        phoneBook.addPhone(new Phone(name, phone, email));
+    }
+}
+
+function find(query) {
+    if (!query) {
+        console.log(phoneBook.findPhones());
         return;
     }
 
-    var queryRegExp = getQueryRegExp(query);
-    console.log('List of removed entries, which contains query - ' + query + ':');
-    phoneBook.forEach(function (item, i) {
-        if (item.search(queryRegExp)) {
-            item.show();
-            item.remove();
-            phoneBook.splice(i, 1);
-        }
-    });
-};
-
-module.exports.importFromCsv = function importFromCsv(filename) {
-    var data = require('fs').readFileSync(filename, 'utf-8');
-
-    var dataStrings = data.split('\n');
-    for (var i = 0; i < dataStrings.length; i++) {
-        if (!dataStrings[i].length) {
-            dataStrings.splice(i, 1);
-            break;
-        }
-        var dataElement = dataStrings[i].split(';');
-        if (dataElement.length === 3) {
-            module.exports.add(dataElement[0], dataElement[1], dataElement[2]);
-        }
-    }
-};
-
-module.exports.showTable = function showTable() {
-    if (isPhoneBookEmpty()) {
-        return;
-    }
-
-    var heightTable = phoneBook.length * 2 + 7;
-    var lengthCell = 0;
-
-    phoneBook.forEach(function (item) {
-        lengthCell = Math.max(lengthCell, item.maxLength());
-    });
-
-    lengthCell += 4;
-    var lengthLine = lengthCell + 2;
-    var currentHeight = 0;
-    var defaultArr = ['Имя', 'Телефон', 'email'];
-    var indexPhoneBook = 0;
-
-    while (currentHeight++ < heightTable) {
-        if (currentHeight === 1 || currentHeight === 5 || currentHeight === heightTable) {
-            outputSolidLine(lengthLine);
-        } else if (currentHeight === 3) {
-            outputLineWithValues(lengthCell, defaultArr);
-        } else if (currentHeight % 2) {
-            outputLineWithValues(lengthCell, phoneBook[indexPhoneBook++].getValues());
-        } else {
-            outputEmptyLine(lengthCell);
-        }
-    }
-};
-
-function outputSolidLine(length) {
-    var count = 0;
-    while (count++ < 3) {
-        for (var i = 0; i < length; i++) {
-            process.stdout.write('=');
-        }
-    }
-    process.stdout.write('\n');
+    query = query.replace(/[^a-zа-яё0-9_-\s]/ig, "\\$&");
+    console.log(phoneBook.findPhones(query));
 }
 
-function outputEmptyLine(length) {
-    process.stdout.write('|');
-    var count = 0;
-    while (count++ < 3) {
-        for (var i = 0; i < length; i++) {
-            process.stdout.write(' ');
+
+function remove(query) {
+    query = query.replace(/[^a-zа-яё0-9_-\s]/ig, "\\$&");
+
+    for (var i = 0; i < phoneBook.getCountPhones(); i++) {
+        if (phoneBook.getPhone(i).search(query)) {
+            phoneBook.removePhone(i);
+            i--;
         }
-        process.stdout.write('|');
     }
-    process.stdout.write('\n');
 }
 
-function outputLineWithValues(length, array) {
-    var count = 0;
-    var currentLength;
-    while (count < 3) {
-        currentLength = 0;
-        process.stdout.write('|  ');
-        process.stdout.write(array[count]);
-        currentLength = array[count].length + 2;
-
-        for (var i = currentLength; i < length; i++) {
-            process.stdout.write(' ');
-        }
-        count++;
+function importFromCsv(filename) {
+    var data = require('fs').readFileSync(filename, 'utf-8').split(/\n|\r|\r\n/g);
+    for (var i = 0; i < data.length; i++) {
+        var phoneValues = data[i].split(';');
+        add(phoneValues[0], phoneValues[1], phoneValues[2]);
     }
-    process.stdout.write('|\n');
+}
+
+function showTable() {
+    var tableHeaders = ['Имя', 'Телефон', 'email'];
+    var eachColumnWidth = phoneBook.maxColumnWidth(tableHeaders);
+    var countPhones = phoneBook.getCountPhones();
+
+    console.log('╔' + createString('═', eachColumnWidth[0]) +
+                '╦' + createString('═', eachColumnWidth[1]) +
+                '╦' + createString('═', eachColumnWidth[2]) + '╗');
+    console.log('║' + createString(' ' + tableHeaders[0], eachColumnWidth[0]) +
+                '║' + createString(' ' + tableHeaders[1], eachColumnWidth[1]) +
+                '║' + createString(' ' + tableHeaders[2], eachColumnWidth[2]) + '║');
+    console.log('╠' + createString('═', eachColumnWidth[0]) +
+                '╬' + createString('═', eachColumnWidth[1]) +
+                '╬' + createString('═', eachColumnWidth[2]) + '╣');
+
+    for (var i = 0; i < countPhones; i++) {
+        var phone = phoneBook.getPhone(i).getValues();
+
+        console.log('║' + createString(' ' + phone[0], eachColumnWidth[0]) +
+                    '║' + createString(' ' + phone[1], eachColumnWidth[1]) +
+                    '║' + createString(' ' + phone[2], eachColumnWidth[2]) + '║');
+
+        if (i + 1 !== countPhones) {
+            console.log('╠' + createString('═', eachColumnWidth[0]) +
+                        '╬' + createString('═', eachColumnWidth[1]) +
+                        '╬' + createString('═', eachColumnWidth[2]) + '╣');
+        }
+    }
+
+    console.log('╚' + createString('═', eachColumnWidth[0]) +
+                '╩' + createString('═', eachColumnWidth[1]) +
+                '╩' + createString('═', eachColumnWidth[2]) + '╝');
+}
+
+function createString(str, lengthColumn) {
+    var ch = str.charAt(0);
+    while (str.length < lengthColumn) {
+        str += ch;
+    }
+    return str;
+}
+
+function beautifyPhone(phone) {
+    phone = phone.replace(/[()+-\s]/g, '');
+    var length = phone.length;
+    var beauty = [];
+
+    for (var i = 2, j = 2; Math.ceil(i / j) < 5; i += j) {
+        beauty.unshift(phone.substr(length - i, j));
+        if (i % j && Math.floor(i / j) < 3) {
+            beauty.unshift(') ');
+        }
+        if (!(i % j)) {
+            beauty.unshift('-');
+            j += i > j ? 1 : 0;
+        }
+
+    }
+    beauty.unshift(' (');
+    if (phone.length > 10) {
+        beauty.unshift(phone.slice(0, -10));
+    }
+
+    var begin = phone.length > 10 ? '+' : '+7';
+    return  begin + beauty.toString().replace(/,/g, '');
 }
