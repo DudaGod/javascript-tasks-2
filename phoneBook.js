@@ -1,8 +1,9 @@
 'use strict';
 
 var REGEXP_NAME = /^([a-zа-яё0-9]+\s?)+[^\s]$/i;
-var REGEXP_PHONE = /^\+?\d{0,4}\s?(?:\d{3}|\(\d{3}\))\s?\d{3}[\s-]?\d[\s-]?\d{3}$/;
-var REGEXP_EMAIL = /^[a-zа-яё0-9](?:\.?[a-zа-яё0-9-_]+)+@(?:[a-zа-яё0-9][-_a-zа-яё0-9]+\.)+[a-zа-яё]{2,4}$/i;
+var REGEXP_PHONE = /^\+?\d{0,4}\s?(\d{3}|\(\d{3}\))\s?\d{3}[\s-]?\d[\s-]?\d{3}$/;
+var REGEXP_EMAIL = /^[a-zа-яё0-9](\.?[a-zа-яё0-9-_]+)+@([a-zа-яё0-9][-_a-zа-яё0-9]+\.)+[a-zа-яё]{2,4}$/i;
+var REGEXP_PHONE_BEAUTY = /^(\d{2})(\d{2})(\d{3})(\d{3})(\d*)$/;
 
 module.exports.add = add;
 module.exports.find = find;
@@ -52,18 +53,20 @@ PhoneBook.prototype.getPhone = function (index) {
  * Return all phones if query undefined and
  * if query is declared - find appropriate phones
  * @param {string|undefined} query
- * @returns {string}
+ * @returns {Array.<string>}
  */
 PhoneBook.prototype.findPhones = function (query) {
-    var str = '';
+    var res = [];
     this._phones.forEach(function (phone) {
         if (!query) {
-            str += phone.getString() + '\n';
+            res.push(phone.getString());
             return;
         }
-        str += phone.search(query) ? phone.getString() + '\n' : '';
+        if (phone.search(query)) {
+            res.push(phone.getString());
+        }
     });
-    return str;
+    return res;
 };
 
 /**
@@ -151,6 +154,10 @@ function isValid(name, phone, email) {
     return REGEXP_NAME.test(name) && REGEXP_PHONE.test(phone) && REGEXP_EMAIL.test(email);
 }
 
+function screeningSpecialSymbols(query) {
+    return query.replace(/[^a-zа-яё0-9_-\s]/ig, '\\$&');
+}
+
 function add(name, phone, email) {
     if (isValid(name, phone, email)) {
         phoneBook.addPhone(new Phone(name, phone, email));
@@ -159,17 +166,17 @@ function add(name, phone, email) {
 
 function find(query) {
     if (!query) {
-        console.log(phoneBook.findPhones());
+        console.log(phoneBook.findPhones().join('\n'));
         return;
     }
 
-    query = query.replace(/[^a-zа-яё0-9_-\s]/ig, "\\$&");
-    console.log(phoneBook.findPhones(query));
+    query = screeningSpecialSymbols(query);
+    console.log(phoneBook.findPhones(query).join('\n'));
 }
 
 
 function remove(query) {
-    query = query.replace(/[^a-zа-яё0-9_-\s]/ig, "\\$&");
+    query = screeningSpecialSymbols(query);
 
     for (var i = 0; i < phoneBook.getCountPhones(); i++) {
         if (phoneBook.getPhone(i).search(query)) {
@@ -221,35 +228,23 @@ function showTable() {
                 '╩' + createString('═', eachColumnWidth[2]) + '╝');
 }
 
-function createString(str, lengthColumn) {
-    var ch = str.charAt(0);
-    while (str.length < lengthColumn) {
-        str += ch;
+function createString(string, lengthColumn) {
+    var str = string.charAt(0);
+    while (string.length < lengthColumn) {
+        string += str;
     }
-    return str;
+    return string;
+}
+
+function stringReverse(str) {
+    return str.split('').reverse().join('');
 }
 
 function beautifyPhone(phone) {
-    phone = phone.replace(/[()+-\s]/g, '');
-    var length = phone.length;
-    var beauty = [];
-
-    for (var i = 2, j = 2; Math.ceil(i / j) < 5; i += j) {
-        beauty.unshift(phone.substr(length - i, j));
-        if (i % j && Math.floor(i / j) < 3) {
-            beauty.unshift(') ');
-        }
-        if (!(i % j)) {
-            beauty.unshift('-');
-            j += i > j ? 1 : 0;
-        }
-
-    }
-    beauty.unshift(' (');
+    phone = phone.replace(/[^\d]/g, '');
+    phone = stringReverse(phone);
     if (phone.length > 10) {
-        beauty.unshift(phone.slice(0, -10));
+        return stringReverse(phone.replace(REGEXP_PHONE_BEAUTY, '$1-$2-$3 )$4( $5+'));
     }
-
-    var begin = phone.length > 10 ? '+' : '+7';
-    return  begin + beauty.toString().replace(/,/g, '');
+    return stringReverse(phone.replace(REGEXP_PHONE_BEAUTY, '$1-$2-$3 )$4( 7+'));
 }
